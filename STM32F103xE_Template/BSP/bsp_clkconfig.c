@@ -2,76 +2,76 @@
 #include "bsp_clkconfig.h"
 
 /*
- * ʹ��HSEʱ������ϵͳʱ�ӵĲ���
- * 1������HSE �����ȴ� HSE �ȶ�
- * 2������ AHB��APB2��APB1��Ԥ��Ƶ����
- * 3������PLL��ʱ����Դ����PLL�ı�Ƶ���ӣ����ø���Ƶ����Ҫ��������������
- * 4������PLL�����ȴ�PLL�ȶ�
- * 5����PLLCK�л�Ϊϵͳʱ��SYSCLK
- * 6����ȡʱ���л�״̬λ��ȷ��PLLCLK��ѡΪϵͳʱ��
+ * 使用HSE时，设置系统时钟的步骤
+ * 1、开启HSE ，并等待 HSE 稳定
+ * 2、设置 AHB、APB2、APB1的预分频因子
+ * 3、设置PLL的时钟来源，和PLL的倍频因子，设置各种频率主要就是在这里设置
+ * 4、开启PLL，并等待PLL稳定
+ * 5、把PLLCK切换为系统时钟SYSCLK
+ * 6、读取时钟切换状态位，确保PLLCLK被选为系统时钟
  */
 
-/* ���� ϵͳʱ��:SYSCLK, AHB����ʱ��:HCLK, APB2����ʱ��:PCLK2, APB1����ʱ��:PCLK1
+/* 设置 系统时钟:SYSCLK, AHB总线时钟:HCLK, APB2总线时钟:PCLK2, APB1总线时钟:PCLK1
  * PCLK2 = HCLK = SYSCLK
- * PCLK1 = HCLK/2,���ֻ����36M
- * ����˵����pllmul��PLL�ı�Ƶ���ӣ��ڵ��õ�ʱ������ǣ�RCC_PLLMul_x , x:[2,3,...16]
- * ������User_SetSysClock(RCC_PLLMul_9);  ������ϵͳʱ��Ϊ��8MHZ * 9 = 72MHZ
- *       User_SetSysClock(RCC_PLLMul_16); ������ϵͳʱ��Ϊ��8MHZ * 16 = 128MHZ����Ƶ����
+ * PCLK1 = HCLK/2,最高只能是36M
+ * 参数说明：pllmul是PLL的倍频因子，在调用的时候可以是：RCC_PLLMul_x , x:[2,3,...16]
+ * 举例：User_SetSysClock(RCC_PLLMul_9);  则设置系统时钟为：8MHZ * 9 = 72MHZ
+ *       User_SetSysClock(RCC_PLLMul_16); 则设置系统时钟为：8MHZ * 16 = 128MHZ，超频慎用
  *
- * HSE��Ϊʱ����Դ������PLL��Ƶ��Ϊϵͳʱ�ӣ�����ͨ��������
+ * HSE作为时钟来源，经过PLL倍频作为系统时钟，这是通常的做法
  */
 void HSE_SetSysClock(uint32_t pllmul)
 {
     __IO uint32_t StartUpCounter = 0, HSEStartUpStatus = 0;
 
-    RCC_DeInit();// ��RCC�����ʼ���ɸ�λ״̬������Ǳ����
-    RCC_HSEConfig(RCC_HSE_ON);//ʹ��HSE�������ⲿ����Ұ�𿪷����õ���8M
+    RCC_DeInit();// 把RCC外设初始化成复位状态，这句是必须的
+    RCC_HSEConfig(RCC_HSE_ON);//使能HSE，开启外部晶振，野火开发板用的是8M
 
     do
     {
         HSEStartUpStatus = RCC_WaitForHSEStartUp();
         StartUpCounter++;
     }
-    while ((HSEStartUpStatus == 0) && (StartUpCounter != 9)); //�ȴ� HSE �����ȶ�
+    while ((HSEStartUpStatus == 0) && (StartUpCounter != 9)); //等待 HSE 启动稳定
 
-    // ֻ�� HSE �ȶ�֮�����������ִ��
+    // 只有 HSE 稳定之后则继续往下执行
     if (HSEStartUpStatus != 0)
     {
 //----------------------------------------------------------------------//
-        // ʹ��FLASH Ԥ��ȡ������
+        // 使能FLASH 预存取缓冲区
         FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
 
-        // SYSCLK�������������ʱ��ı������ã�����ͳһ���ó�2
-        // ���ó�2��ʱ��SYSCLK����48MҲ���Թ�����������ó�0����1��ʱ��
-        // ������õ�SYSCLK�����˷�Χ�Ļ���������Ӳ�����󣬳��������
-        // 0��0 < SYSCLK <= 24M
-        // 1��24< SYSCLK <= 48M
-        // 2��48< SYSCLK <= 72M
+        // SYSCLK周期与闪存访问时间的比例设置，这里统一设置成2
+        // 设置成2的时候，SYSCLK低于48M也可以工作，如果设置成0或者1的时候，
+        // 如果配置的SYSCLK超出了范围的话，则会进入硬件错误，程序就死了
+        // 0：0 < SYSCLK <= 24M
+        // 1：24< SYSCLK <= 48M
+        // 2：48< SYSCLK <= 72M
         FLASH_SetLatency(FLASH_Latency_2);
 //----------------------------------------------------------------------//
 
-        RCC_HCLKConfig(RCC_SYSCLK_Div1);// AHBԤ��Ƶ��������Ϊ1��Ƶ��HCLK = SYSCLK
-        RCC_PCLK2Config(RCC_HCLK_Div1); // APB2Ԥ��Ƶ��������Ϊ1��Ƶ��PCLK2 = HCLK
-        RCC_PCLK1Config(RCC_HCLK_Div2);// APB1Ԥ��Ƶ��������Ϊ1��Ƶ��PCLK1 = HCLK/2
+        RCC_HCLKConfig(RCC_SYSCLK_Div1);// AHB预分频因子设置为1分频，HCLK = SYSCLK
+        RCC_PCLK2Config(RCC_HCLK_Div1); // APB2预分频因子设置为1分频，PCLK2 = HCLK
+        RCC_PCLK1Config(RCC_HCLK_Div2);// APB1预分频因子设置为1分频，PCLK1 = HCLK/2
 
-//-----------------���ø���Ƶ����Ҫ��������������-------------------//
-        // ����PLLʱ����ԴΪHSE������PLL��Ƶ����
+//-----------------设置各种频率主要就是在这里设置-------------------//
+        // 设置PLL时钟来源为HSE，设置PLL倍频因子
         // PLLCLK = 8MHz * pllmul
         RCC_PLLConfig(RCC_PLLSource_HSE_Div1, pllmul);
 //------------------------------------------------------------------//
 
-        RCC_PLLCmd(ENABLE); // ����PLL
-        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);// �ȴ� PLL�ȶ�
+        RCC_PLLCmd(ENABLE); // 开启PLL
+        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);// 等待 PLL稳定
         RCC_SYSCLKConfig(
-            RCC_SYSCLKSource_PLLCLK);// ��PLL�ȶ�֮�󣬰�PLLʱ���л�Ϊϵͳʱ��SYSCLK
-        while (RCC_GetSYSCLKSource() != 0x08);// ��ȡʱ���л�״̬λ��ȷ��PLLCLK��ѡΪϵͳʱ��
+            RCC_SYSCLKSource_PLLCLK);// 当PLL稳定之后，把PLL时钟切换为系统时钟SYSCLK
+        while (RCC_GetSYSCLKSource() != 0x08);// 读取时钟切换状态位，确保PLLCLK被选为系统时钟
 
     }
     else
     {
-        // ���HSE����ʧ�ܣ���ô����ͻ���������û������������ӳ����Ĵ��봦��
-        // ��HSE����ʧ�ܻ��߹��ϵ�ʱ�򣬵�Ƭ�����Զ���HSI����Ϊϵͳʱ�ӣ�
-        // HSI���ڲ��ĸ���ʱ�ӣ�8MHZ
+        // 如果HSE开启失败，那么程序就会来到这里，用户可在这里添加出错的代码处理
+        // 当HSE开启失败或者故障的时候，单片机会自动把HSI设置为系统时钟，
+        // HSI是内部的高速时钟，8MHZ
         while (1)
         {
         }
@@ -79,75 +79,75 @@ void HSE_SetSysClock(uint32_t pllmul)
 }
 
 /*
- * ʹ��HSIʱ������ϵͳʱ�ӵĲ���
- * 1������HSI �����ȴ� HSI �ȶ�
- * 2������ AHB��APB2��APB1��Ԥ��Ƶ����
- * 3������PLL��ʱ����Դ����PLL�ı�Ƶ���ӣ����ø���Ƶ����Ҫ��������������
- * 4������PLL�����ȴ�PLL�ȶ�
- * 5����PLLCK�л�Ϊϵͳʱ��SYSCLK
- * 6����ȡʱ���л�״̬λ��ȷ��PLLCLK��ѡΪϵͳʱ��
+ * 使用HSI时，设置系统时钟的步骤
+ * 1、开启HSI ，并等待 HSI 稳定
+ * 2、设置 AHB、APB2、APB1的预分频因子
+ * 3、设置PLL的时钟来源，和PLL的倍频因子，设置各种频率主要就是在这里设置
+ * 4、开启PLL，并等待PLL稳定
+ * 5、把PLLCK切换为系统时钟SYSCLK
+ * 6、读取时钟切换状态位，确保PLLCLK被选为系统时钟
  */
 
-/* ���� ϵͳʱ��:SYSCLK, AHB����ʱ��:HCLK, APB2����ʱ��:PCLK2, APB1����ʱ��:PCLK1
+/* 设置 系统时钟:SYSCLK, AHB总线时钟:HCLK, APB2总线时钟:PCLK2, APB1总线时钟:PCLK1
  * PCLK2 = HCLK = SYSCLK
- * PCLK1 = HCLK/2,���ֻ����36M
- * ����˵����pllmul��PLL�ı�Ƶ���ӣ��ڵ��õ�ʱ������ǣ�RCC_PLLMul_x , x:[2,3,...16]
- * ������HSI_SetSysClock(RCC_PLLMul_9);  ������ϵͳʱ��Ϊ��4MHZ * 9 = 72MHZ
- *       HSI_SetSysClock(RCC_PLLMul_16); ������ϵͳʱ��Ϊ��4MHZ * 16 = 64MHZ
+ * PCLK1 = HCLK/2,最高只能是36M
+ * 参数说明：pllmul是PLL的倍频因子，在调用的时候可以是：RCC_PLLMul_x , x:[2,3,...16]
+ * 举例：HSI_SetSysClock(RCC_PLLMul_9);  则设置系统时钟为：4MHZ * 9 = 72MHZ
+ *       HSI_SetSysClock(RCC_PLLMul_16); 则设置系统时钟为：4MHZ * 16 = 64MHZ
  *
- * HSI��Ϊʱ����Դ������PLL��Ƶ��Ϊϵͳʱ�ӣ�������HSE���ϵ�ʱ���ʹ�õķ���
- * HSI����Ϊ�¶ȵ�ԭ�����Ư�ƣ����ȶ���һ�㲻����HSI��Ϊʱ����Դ���������Ȳ����ѵ����
- * ���HSIҪ��ΪPLLʱ�ӵ���Դ�Ļ����������Ƶ֮��ſ��ԣ���HSI/2����PLL��Ƶ�������ֻ����16
- * ���Ե�ʹ��HSI��ʱ��SYSCLK���ֻ����4M*16=64M
+ * HSI作为时钟来源，经过PLL倍频作为系统时钟，这是在HSE故障的时候才使用的方法
+ * HSI会因为温度等原因会有漂移，不稳定，一般不会用HSI作为时钟来源，除非是迫不得已的情况
+ * 如果HSI要作为PLL时钟的来源的话，必须二分频之后才可以，即HSI/2，而PLL倍频因子最大只能是16
+ * 所以当使用HSI的时候，SYSCLK最大只能是4M*16=64M
  */
 
 void HSI_SetSysClock(uint32_t pllmul)
 {
     __IO uint32_t HSIStartUpStatus = 0;
 
-    RCC_DeInit();// ��RCC�����ʼ���ɸ�λ״̬������Ǳ����
-    RCC_HSICmd(ENABLE);//ʹ��HSI
-    HSIStartUpStatus = RCC->CR & RCC_CR_HSIRDY; // �ȴ� HSI ����
+    RCC_DeInit();// 把RCC外设初始化成复位状态，这句是必须的
+    RCC_HSICmd(ENABLE);//使能HSI
+    HSIStartUpStatus = RCC->CR & RCC_CR_HSIRDY; // 等待 HSI 就绪
 
-    // ֻ�� HSI����֮�����������ִ��
+    // 只有 HSI就绪之后则继续往下执行
     if (HSIStartUpStatus == RCC_CR_HSIRDY)
     {
 //----------------------------------------------------------------------//
-        // ʹ��FLASH Ԥ��ȡ������
+        // 使能FLASH 预存取缓冲区
         FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
 
-        // SYSCLK�������������ʱ��ı������ã�����ͳһ���ó�2
-        // ���ó�2��ʱ��SYSCLK����48MҲ���Թ�����������ó�0����1��ʱ��
-        // ������õ�SYSCLK�����˷�Χ�Ļ���������Ӳ�����󣬳��������
-        // 0��0 < SYSCLK <= 24M
-        // 1��24< SYSCLK <= 48M
-        // 2��48< SYSCLK <= 72M
+        // SYSCLK周期与闪存访问时间的比例设置，这里统一设置成2
+        // 设置成2的时候，SYSCLK低于48M也可以工作，如果设置成0或者1的时候，
+        // 如果配置的SYSCLK超出了范围的话，则会进入硬件错误，程序就死了
+        // 0：0 < SYSCLK <= 24M
+        // 1：24< SYSCLK <= 48M
+        // 2：48< SYSCLK <= 72M
         FLASH_SetLatency(FLASH_Latency_2);
 //----------------------------------------------------------------------//
 
-        RCC_HCLKConfig(RCC_SYSCLK_Div1); // AHBԤ��Ƶ��������Ϊ1��Ƶ��HCLK = SYSCLK
-        RCC_PCLK2Config(RCC_HCLK_Div1);// APB2Ԥ��Ƶ��������Ϊ1��Ƶ��PCLK2 = HCLK
-        RCC_PCLK1Config(RCC_HCLK_Div2);// APB1Ԥ��Ƶ��������Ϊ1��Ƶ��PCLK1 = HCLK/2
+        RCC_HCLKConfig(RCC_SYSCLK_Div1); // AHB预分频因子设置为1分频，HCLK = SYSCLK
+        RCC_PCLK2Config(RCC_HCLK_Div1);// APB2预分频因子设置为1分频，PCLK2 = HCLK
+        RCC_PCLK1Config(RCC_HCLK_Div2);// APB1预分频因子设置为1分频，PCLK1 = HCLK/2
 
-//-----------------���ø���Ƶ����Ҫ��������������-------------------//
-        // ����PLLʱ����ԴΪHSE������PLL��Ƶ����
+//-----------------设置各种频率主要就是在这里设置-------------------//
+        // 设置PLL时钟来源为HSE，设置PLL倍频因子
         // PLLCLK = 4MHz * pllmul
         RCC_PLLConfig(RCC_PLLSource_HSI_Div2, pllmul);
 //------------------------------------------------------------------//
 
-        RCC_PLLCmd(ENABLE);// ����PLL
-        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);// �ȴ� PLL�ȶ�
+        RCC_PLLCmd(ENABLE);// 开启PLL
+        while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);// 等待 PLL稳定
         RCC_SYSCLKConfig(
-            RCC_SYSCLKSource_PLLCLK);// ��PLL�ȶ�֮�󣬰�PLLʱ���л�Ϊϵͳʱ��SYSCLK
+            RCC_SYSCLKSource_PLLCLK);// 当PLL稳定之后，把PLL时钟切换为系统时钟SYSCLK
 
-        while (RCC_GetSYSCLKSource() != 0x08); // ��ȡʱ���л�״̬λ��ȷ��PLLCLK��ѡΪϵͳʱ��
+        while (RCC_GetSYSCLKSource() != 0x08); // 读取时钟切换状态位，确保PLLCLK被选为系统时钟
 
     }
     else
     {
-        // ���HSI����ʧ�ܣ���ô����ͻ���������û������������ӳ����Ĵ��봦��
-        // ��HSE����ʧ�ܻ��߹��ϵ�ʱ�򣬵�Ƭ�����Զ���HSI����Ϊϵͳʱ�ӣ�
-        // HSI���ڲ��ĸ���ʱ�ӣ�8MHZ
+        // 如果HSI开启失败，那么程序就会来到这里，用户可在这里添加出错的代码处理
+        // 当HSE开启失败或者故障的时候，单片机会自动把HSI设置为系统时钟，
+        // HSI是内部的高速时钟，8MHZ
         while (1)
         {
         }
@@ -155,29 +155,29 @@ void HSI_SetSysClock(uint32_t pllmul)
 }
 
 /*
- * ��ʼ��MCO����PA8
- * ��F1ϵ����MCO����ֻ��һ������PA8����F4ϵ���У�MCO���Ż�������
+ * 初始化MCO引脚PA8
+ * 在F1系列中MCO引脚只有一个，即PA8，在F4系列中，MCO引脚会有两个
  */
 void MCO_GPIO_Config(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
-    // ����GPIOA��ʱ��
+    // 开启GPIOA的时钟
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 
-    // ѡ��GPIO8����
+    // 选择GPIO8引脚
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
 
-    //����Ϊ���ù����������
+    //设置为复用功能推挽输出
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
 
-    //����IO�ķ�ת����Ϊ50M
+    //设置IO的翻转速率为50M
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
-    // ��ʼ��GPIOA8
+    // 初始化GPIOA8
     GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-    // ����MCO�������ʱ�ӣ���ʾ����������PA8�����������ʱ���ź�
-    // MCO�������������HSE,HSI,PLLCLK/2,SYSCLK
+    // 设置MCO引脚输出时钟，用示波器即可在PA8测量到输出的时钟信号
+    // MCO引脚输出可以是HSE,HSI,PLLCLK/2,SYSCLK
     //RCC_MCOConfig(RCC_MCO_HSE);                // 8M
     //RCC_MCOConfig(RCC_MCO_HSI);              // 8M
     //RCC_MCOConfig(RCC_MCO_PLLCLK_Div2);    // 36M

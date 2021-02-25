@@ -1,6 +1,6 @@
 #include "stm32f10x.h"
 
-//ÏµÍ³ÉÏµçÊ±£¬Ä¬ÈÏÖ´ÐÐSystemInit£¬ÖÁ´Ë PCLK2=HCLK=SYSCLK=PLLCLK=72M£¬PCLK1= HCLK/2 = 36M
+//ç³»ç»Ÿä¸Šç”µæ—¶ï¼Œé»˜è®¤æ‰§è¡ŒSystemInitï¼Œè‡³æ­¤ PCLK2=HCLK=SYSCLK=PLLCLK=72Mï¼ŒPCLK1= HCLK/2 = 36M
 
 int main(void)
 {	
