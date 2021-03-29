@@ -1,0 +1,13 @@
+.\output\mbrtu.o: ..\Package\modbus\rtu\mbrtu.c
+.\output\mbrtu.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+.\output\mbrtu.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+.\output\mbrtu.o: ..\BSP\port\port.h
+.\output\mbrtu.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\assert.h
+.\output\mbrtu.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\inttypes.h
+.\output\mbrtu.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+.\output\mbrtu.o: ..\Package\modbus\include\mb.h
+.\output\mbrtu.o: ..\Package\modbus\include\mbport.h
+.\output\mbrtu.o: ..\Package\modbus\include\mbproto.h
+.\output\mbrtu.o: ..\Package\modbus\rtu\mbrtu.h
+.\output\mbrtu.o: ..\Package\modbus\include\mbframe.h
+.\output\mbrtu.o: ..\Package\modbus\rtu\mbcrc.h

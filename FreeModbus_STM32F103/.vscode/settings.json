@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "mbutils.h": "c",
+        "mb.h": "c"
+    }
+}
